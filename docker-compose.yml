@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  doppler-bridge:
+    build: .
+    ports:
+      - "3001:3000"
+    environment:
+      # Dokploy configuration
+      DOKPLOY_HOST: ${DOKPLOY_HOST}
+      DOKPLOY_API_TOKEN: ${DOKPLOY_API_TOKEN}
+      DOKPLOY_APPLICATION_ID: ${DOKPLOY_APPLICATION_ID}
+      DOKPLOY_SERVICE_TYPE: ${DOKPLOY_SERVICE_TYPE:-application}
+
+      # Doppler configuration
+      DOPPLER_TOKEN: ${DOPPLER_TOKEN}
+      DOPPLER_SECRET: ${DOPPLER_SECRET:-}
+
+      # Webhook authentication
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET}
+
+      # Cloudflare Zero Trust (for Dokploy behind ZeroTrust)
+      CF_ACCESS_CLIENT_ID: ${CF_ACCESS_CLIENT_ID:-}
+      CF_ACCESS_CLIENT_SECRET: ${CF_ACCESS_CLIENT_SECRET:-}
+
+      # Server configuration
+      PORT: 3000 # Internal container port (don't change)
+
+    restart: unless-stopped
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/health",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s

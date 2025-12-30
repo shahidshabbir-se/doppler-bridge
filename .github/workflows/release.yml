@@ -1,0 +1,86 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          generate_release_notes: true
+          body: |
+            ## Docker Image
+            
+            **Multi-platform support:** `linux/amd64`, `linux/arm64`
+            
+            ```bash
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ```
+            
+            Or use `latest` tag:
+            ```bash
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+            ```
+            
+            ## Configuration
+            
+            Required environment variables:
+            - `DOKPLOY_HOST` - Your Dokploy instance URL
+            - `DOKPLOY_API_TOKEN` - Dokploy API token
+            - `DOKPLOY_APPLICATION_ID` - Application or Compose ID
+            - `DOPPLER_TOKEN` - Doppler service token
+            - `WEBHOOK_SECRET` - Webhook authentication secret
+            
+            Optional:
+            - `DOKPLOY_SERVICE_TYPE` - `application` or `compose` (default: `application`)
+            - `DOPPLER_SECRET` - Doppler webhook HMAC signing secret
+            - `CF_ACCESS_CLIENT_ID` - Cloudflare Zero Trust Client ID
+            - `CF_ACCESS_CLIENT_SECRET` - Cloudflare Zero Trust Client Secret
+            - `PORT` - Server port (default: `3000`)
