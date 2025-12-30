@@ -16,11 +16,13 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	log.Printf("Starting Doppler Bridge")
+	log.Printf("Starting Doppler Bridge (Multi-Tenant)")
 	log.Printf("  Port: %d", cfg.Port)
 	log.Printf("  Dokploy Host: %s", cfg.DokployHost)
-	log.Printf("  Service Type: %s", cfg.DokployServiceType)
-	log.Printf("  Service ID: %s", cfg.DokployApplicationID)
+	log.Printf("  Services: %d configured", len(cfg.Services))
+	for _, svc := range cfg.Services {
+		log.Printf("    - /webhook/%s -> %s (%s) [token: %s...]", svc.Path, svc.ServiceID, svc.ServiceType, svc.DopplerToken[:15])
+	}
 	if cfg.DopplerSecret != "" {
 		log.Printf("  Doppler Signature Verification: ENABLED")
 	} else {
@@ -36,13 +38,17 @@ func main() {
 	// Create handler
 	h := handler.NewHandler(cfg)
 
-	// Setup routes
-	http.HandleFunc("/webhook", h.AuthMiddleware(h.WebhookHandler))
+	// Setup routes (path-based routing)
+	http.HandleFunc("/webhook/", h.AuthMiddleware(h.WebhookHandler))
 	http.HandleFunc("/health", h.HealthHandler)
 
 	// Start server
 	addr := fmt.Sprintf(":%d", cfg.Port)
 	log.Printf("Server listening on %s", addr)
+	log.Printf("Webhook URLs:")
+	for _, svc := range cfg.Services {
+		log.Printf("  https://your-domain.com/webhook/%s", svc.Path)
+	}
 
 	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatalf("Server failed: %v", err)
