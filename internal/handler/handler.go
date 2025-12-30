@@ -89,11 +89,20 @@ func (h *Handler) WebhookHandler(w http.ResponseWriter, r *http.Request) {
 		webhook.Type, webhook.Project.Name, webhook.Config.Name,
 		len(webhook.Diff.Added), len(webhook.Diff.Removed), len(webhook.Diff.Updated))
 
+	// Respond immediately and process in background
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
+
+	// Process webhook asynchronously
+	go h.processWebhook(webhook)
+}
+
+// processWebhook handles the webhook processing in the background
+func (h *Handler) processWebhook(webhook doppler.Webhook) {
 	// Fetch secrets from Doppler
 	secrets, err := h.dopplerClient.FetchSecrets(webhook.Config.Project, webhook.Config.Name)
 	if err != nil {
 		log.Printf("Failed to fetch secrets: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -105,7 +114,6 @@ func (h *Handler) WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	// Update environment in Dokploy
 	if err := h.dokployClient.SaveEnvironment(h.cfg.DokployApplicationID, envString, h.cfg.DokployServiceType); err != nil {
 		log.Printf("Failed to update environment: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
@@ -114,14 +122,10 @@ func (h *Handler) WebhookHandler(w http.ResponseWriter, r *http.Request) {
 	// Trigger redeploy
 	if err := h.dokployClient.Redeploy(h.cfg.DokployApplicationID, h.cfg.DokployServiceType); err != nil {
 		log.Printf("Failed to redeploy: %v", err)
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	log.Printf("Successfully triggered redeploy for %s: %s", h.cfg.DokployServiceType, h.cfg.DokployApplicationID)
-
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
 }
 
 // HealthHandler handles health check requests
